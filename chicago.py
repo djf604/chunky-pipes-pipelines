@@ -599,7 +599,8 @@ class Pipeline(BasePipeline):
         total_raw_reads_end1 = sum([int(count[0]) for count in qc_metrics['total_raw_reads']])/4
         synapse_metadata['TotalReads'] = str(total_raw_reads_end1)
 
-        print json.dumps(synapse_metadata, indent=4)
+        with open(os.path.join(logs_dir, 'synapse_metadata.txt'), 'w') as synapse_metadata_file:
+            synapse_metadata_file.write(json.dumps(synapse_metadata, indent=4) + '\n')
 
         # Delete temporary files
         for delete_file in staging_delete:

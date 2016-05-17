@@ -2,10 +2,35 @@ import os
 import subprocess
 import re
 import time
+import pysam
 from chunkypipes.components import Software, Parameter, Redirect, Pipe, BasePipeline
+
+"""
+TODO It would be cool to input paired-end fastq as /path/to/sample.R*.fastq.gz, but it would
+have to be quoted on the command line
+"""
 
 READ1 = 0
 FIRST_CHAR = 0
+
+MINUS_STRAND_SHIFT = -5
+PLUS_STRAND_SHIFT = 4
+
+STERIC_HINDRANCE_CUTOFF = 38
+
+
+# def remove_steric_hindrance(unprocessed_bam, processed_bam):
+#     import pysam
+#     subprocess.call('samtools index {}'.format(unprocessed_bam), shell=True)
+#     raw_bam_file = pysam.AlignmentFile(unprocessed_bam, 'rb')
+#     processed_bam_file = pysam.AlignmentFile(processed_bam, 'wb', template=raw_bam_file)
+#     for read in raw_bam_file.fetch():
+#         if abs(int(read.template_length)) >= STERIC_HINDRANCE_CUTOFF:
+#             processed_bam_file.write(read)
+#
+#     raw_bam_file.close()
+#     processed_bam_file.close()
+#     subprocess.call(['rm', '-rf', unprocessed_bam + '.bai'])
 
 
 class Pipeline(BasePipeline):
@@ -37,8 +62,9 @@ class Pipeline(BasePipeline):
                 'path': 'Full path to Picard [Ex. java -jar /path/to/picard.jar]'
             },
             'bedtools': {
-                'path': 'Full path to bedtools',
-                'blacklist-bed': 'Full path to the BED of blacklisted genomic regions'
+                'path': 'Full path to bedtools >= 2.25.0',
+                'blacklist-bed': 'Full path to the BED of blacklisted genomic regions',
+                'genome-sizes': 'Full path to a genome sizes file'
             },
             'makeTagDirectory': {
                 'path': 'Full path to HOMER makeTagDirectory'
@@ -118,6 +144,7 @@ class Pipeline(BasePipeline):
         bedtools_merge = Software('bedtools merge', pipeline_config['bedtools']['path'] + ' merge')
         bedtools_intersect = Software('bedtools intersect',
                                       pipeline_config['bedtools']['path'] + ' intersect')
+        bedtools_shift = Software('bedtools shift', pipeline_config['bedtools']['path'] + ' shift')
         homer_maketagdir = Software('HOMER makeTagDirectory',
                                     pipeline_config['makeTagDirectory']['path'])
         homer_findpeaks = Software('HOMER findPeaks', pipeline_config['findPeaks']['path'])
@@ -227,6 +254,7 @@ class Pipeline(BasePipeline):
                     ))
 
             sortmerged_bam = os.path.join(output_dir, '{}.sortmerged.bam'.format(lib_prefix))
+            steric_filter_bam = os.path.join(output_dir, '{}.steric.bam'.format(lib_prefix))
             duprm_bam = os.path.join(output_dir, '{}.duprm.bam'.format(lib_prefix))
             unique_bam = os.path.join(output_dir, '{}.unique.bam'.format(lib_prefix))
             unmappedrm_bam = os.path.join(output_dir, '{}.unmappedrm.bam'.format(lib_prefix))
@@ -237,16 +265,28 @@ class Pipeline(BasePipeline):
                 Parameter('--tmpcompression', '6'),
                 Parameter('--tmpdir', tmp_dir),
                 Parameter(*[bam for bam in bwa_bam_outs]),
-                # Parameter(' '.join([bam for bam in bwa_bam_outs])),
                 Redirect(stream=Redirect.STDOUT, dest=sortmerged_bam),
                 Redirect(stream=Redirect.STDERR, dest=os.path.join(logs_dir, 'novosort.log'))
             )
+
+            # TODO Remove all fragments less than 38bp
+            # This creates a dependency on PySam
+            samtools_index.run(Parameter(sortmerged_bam))
+            sortmerged_bam_alignmentfile = pysam.AlignmentFile(sortmerged_bam, 'rb')
+            steric_filter_bam_alignmentfile = pysam.AlignmentFile(steric_filter_bam, 'wb',
+                                                                  template=sortmerged_bam_alignmentfile)
+            for read in sortmerged_bam_alignmentfile.fetch():
+                if abs(int(read.template_length)) >= STERIC_HINDRANCE_CUTOFF:
+                    steric_filter_bam_alignmentfile.write(read)
+
+            sortmerged_bam_alignmentfile.close()
+            steric_filter_bam_alignmentfile.close()
 
             # Mark and remove duplicates
             markduplicates_metrics_filepath = os.path.join(logs_dir,
                                                            'mark_dup.metrics')
             picard_mark_dup.run(
-                Parameter('INPUT={}'.format(sortmerged_bam)),
+                Parameter('INPUT={}'.format(steric_filter_bam)),
                 Parameter('OUTPUT={}'.format(duprm_bam)),
                 Parameter('TMP_DIR={}'.format(tmp_dir)),
                 Parameter('METRICS_FILE={}'.format(markduplicates_metrics_filepath)),
@@ -299,6 +339,8 @@ class Pipeline(BasePipeline):
             # Stage delete for temporary files
             staging_delete.extend([
                 sortmerged_bam,
+                sortmerged_bam + '.bai', # BAM index file
+                steric_filter_bam,
                 unique_bam,
                 duprm_bam,
                 unmappedrm_bam,
@@ -309,7 +351,10 @@ class Pipeline(BasePipeline):
         if step <= 5:
             # Generate filename for final processed BAM and BED
             processed_bam = os.path.join(output_dir, '{}.processed.bam'.format(lib_prefix))
+            unshifted_bed = os.path.join(output_dir, '{}.unshifted.bed'.format(lib_prefix))
             processed_bed = os.path.join(output_dir, '{}.processed.bed'.format(lib_prefix))
+
+            # staging_delete.append(unshifted_bed)
 
             # Generate filename for chrM removed BAM
             chrmrm_bam = os.path.join(output_dir, '{}.chrmrm.bam'.format(lib_prefix))
@@ -333,6 +378,16 @@ class Pipeline(BasePipeline):
             # Convert BAM to BED
             bedtools_bamtobed.run(
                 Parameter('-i', processed_bam),
+                Redirect(stream=Redirect.STDOUT, dest=unshifted_bed)
+            )
+
+            # Shifting + strand by 4 and - strand by -5, according to
+            # the ATACseq paper
+            bedtools_shift.run(
+                Parameter('-i', unshifted_bed),
+                Parameter('-g', pipeline_config['bedtools']['genome-sizes']),
+                Parameter('-m', str(MINUS_STRAND_SHIFT)),
+                Parameter('-p', str(PLUS_STRAND_SHIFT)),
                 Redirect(stream=Redirect.STDOUT, dest=processed_bed)
             )
 
