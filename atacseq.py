@@ -92,6 +92,57 @@ class Pipeline(BasePipeline):
         num_lines = subprocess.check_output(['wc', '-l'], stdin=zcat.stdout)
         return num_lines.strip()
 
+    @staticmethod
+    def shift_reads(input_bed_filepath, output_bed_filepath, genome_sizes_filepath,
+                    log_filepath, minus_strand_shift, plus_strand_shift):
+        def to_log(msg, log_filepath):
+            with open(log_filepath, 'a') as log_file:
+                log_file.write(msg + '\n')
+
+        def within_genome_boundry(chrom, check_pos, genome_sizes_dict):
+            if check_pos < 1:
+                return False
+            if check_pos > genome_sizes_dict[chrom]:
+                return False
+            return True
+
+        genome_sizes = {}
+        with open(genome_sizes_filepath) as genome_sizes_file:
+            for line in genome_sizes_file:
+                chrom, size = line.strip().split('\t')
+                genome_sizes[chrom] = int(size)
+
+        output_bed = open(output_bed_filepath, 'w')
+        with open(input_bed_filepath) as input_bed:
+            for line in input_bed:
+                record = line.strip().split('\t')
+                chrom, start, end, strand = record[0], int(record[1]), int(record[2]), record[5]
+
+                if strand == '+':
+                    new_start = start + plus_strand_shift
+                    new_end = end + plus_strand_shift
+                elif strand == '-':
+                    new_start = start + minus_strand_shift
+                    new_end = end + minus_strand_shift
+                else:
+                    to_log('Mal-formatted line in file, skipping:', log_filepath)
+                    to_log(line.strip(), log_filepath)
+                    continue
+
+                if not within_genome_boundry(chrom, new_start, genome_sizes):
+                    to_log('Shift start site beyond chromosome boundry:', log_filepath)
+                    to_log(line.strip(), log_filepath)
+                    continue
+                if not within_genome_boundry(chrom, new_end, genome_sizes):
+                    to_log('Shift end site beyond chromosome boundry:', log_filepath)
+                    to_log(line.strip(), log_filepath)
+                    continue
+
+                output_bed.write('\t'.join([chrom, str(new_start), str(new_end)] + record[3:]) + '\n')
+
+        output_bed.flush()
+        output_bed.close()
+
     def run_pipeline(self, pipeline_args, pipeline_config):
         # Instantiate variables from argparse
         read_pairs = pipeline_args['reads']
@@ -383,13 +434,24 @@ class Pipeline(BasePipeline):
 
             # Shifting + strand by 4 and - strand by -5, according to
             # the ATACseq paper
-            bedtools_shift.run(
-                Parameter('-i', unshifted_bed),
-                Parameter('-g', pipeline_config['bedtools']['genome-sizes']),
-                Parameter('-m', str(MINUS_STRAND_SHIFT)),
-                Parameter('-p', str(PLUS_STRAND_SHIFT)),
-                Redirect(stream=Redirect.STDOUT, dest=processed_bed)
+
+            # This used to be bedtools shift, but they are fired
+            self.shift_reads(
+                input_bed_filepath=unshifted_bed,
+                output_bed_filepath=processed_bed,
+                log_filepath=os.path.join(logs_dir, 'shift_reads.logs'),
+                genome_sizes_filepath=pipeline_config['bedtools']['genome-sizes'],
+                minus_strand_shift=MINUS_STRAND_SHIFT,
+                plus_strand_shift=PLUS_STRAND_SHIFT
             )
+
+            # bedtools_shift.run(
+            #     Parameter('-i', unshifted_bed),
+            #     Parameter('-g', pipeline_config['bedtools']['genome-sizes']),
+            #     Parameter('-m', str(MINUS_STRAND_SHIFT)),
+            #     Parameter('-p', str(PLUS_STRAND_SHIFT)),
+            #     Redirect(stream=Redirect.STDOUT, dest=processed_bed)
+            # )
 
         if step <= 6:
             processed_bed = os.path.join(output_dir, '{}.processed.bed'.format(lib_prefix))

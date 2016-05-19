@@ -37,7 +37,7 @@ class Pipeline(BasePipeline):
                 'path': 'Full path to novosort'
             },
             'samtools': {
-                'path': 'Full path to samtools (must be >= version 2.1)'
+                'path': 'Full path to samtools (must be >= version 1.2)'
             },
             'picard': {
                 'path': 'Full path to the picard jar [Ex. /path/to/picard.jar]',
