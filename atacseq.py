@@ -19,20 +19,6 @@ PLUS_STRAND_SHIFT = 4
 STERIC_HINDRANCE_CUTOFF = 38
 
 
-# def remove_steric_hindrance(unprocessed_bam, processed_bam):
-#     import pysam
-#     subprocess.call('samtools index {}'.format(unprocessed_bam), shell=True)
-#     raw_bam_file = pysam.AlignmentFile(unprocessed_bam, 'rb')
-#     processed_bam_file = pysam.AlignmentFile(processed_bam, 'wb', template=raw_bam_file)
-#     for read in raw_bam_file.fetch():
-#         if abs(int(read.template_length)) >= STERIC_HINDRANCE_CUTOFF:
-#             processed_bam_file.write(read)
-#
-#     raw_bam_file.close()
-#     processed_bam_file.close()
-#     subprocess.call(['rm', '-rf', unprocessed_bam + '.bai'])
-
-
 class Pipeline(BasePipeline):
     def description(self):
         return """Pipeline used by the PsychENCODE group at University of Chicago to
@@ -195,7 +181,6 @@ class Pipeline(BasePipeline):
         bedtools_merge = Software('bedtools merge', pipeline_config['bedtools']['path'] + ' merge')
         bedtools_intersect = Software('bedtools intersect',
                                       pipeline_config['bedtools']['path'] + ' intersect')
-        bedtools_shift = Software('bedtools shift', pipeline_config['bedtools']['path'] + ' shift')
         homer_maketagdir = Software('HOMER makeTagDirectory',
                                     pipeline_config['makeTagDirectory']['path'])
         homer_findpeaks = Software('HOMER findPeaks', pipeline_config['findPeaks']['path'])
@@ -320,7 +305,6 @@ class Pipeline(BasePipeline):
                 Redirect(stream=Redirect.STDERR, dest=os.path.join(logs_dir, 'novosort.log'))
             )
 
-            # TODO Remove all fragments less than 38bp
             # This creates a dependency on PySam
             samtools_index.run(Parameter(sortmerged_bam))
             sortmerged_bam_alignmentfile = pysam.AlignmentFile(sortmerged_bam, 'rb')
@@ -342,6 +326,7 @@ class Pipeline(BasePipeline):
                 Parameter('TMP_DIR={}'.format(tmp_dir)),
                 Parameter('METRICS_FILE={}'.format(markduplicates_metrics_filepath)),
                 Parameter('REMOVE_DUPLICATES=true'),
+                Parameter('VALIDATION_STRINGENCY=LENIENT'),
                 Redirect(stream=Redirect.BOTH, dest=os.path.join(logs_dir, 'mark_dup.log'))
             )
 
@@ -379,6 +364,8 @@ class Pipeline(BasePipeline):
             samtools_index.run(
                 Parameter(unmappedrm_bam)
             )
+
+            # Remove chrM
             all_chr = [Parameter('chr{}'.format(chromosome)) for chromosome in map(str, range(1, 23)) + ['X', 'Y']]
             samtools_view.run(
                 Parameter('-b'),
@@ -390,7 +377,7 @@ class Pipeline(BasePipeline):
             # Stage delete for temporary files
             staging_delete.extend([
                 sortmerged_bam,
-                sortmerged_bam + '.bai', # BAM index file
+                sortmerged_bam + '.bai',  # BAM index file
                 steric_filter_bam,
                 unique_bam,
                 duprm_bam,
@@ -426,11 +413,18 @@ class Pipeline(BasePipeline):
                 Parameter('HISTOGRAM_FILE={}'.format(os.path.join(logs_dir, lib_prefix + '.insertsize.pdf')))
             )
 
+            # Generate index for processed BAM
+            samtools_index.run(
+                Parameter(processed_bam)
+            )
+
             # Convert BAM to BED
             bedtools_bamtobed.run(
                 Parameter('-i', processed_bam),
                 Redirect(stream=Redirect.STDOUT, dest=unshifted_bed)
             )
+
+            staging_delete.append(unshifted_bed)
 
             # Shifting + strand by 4 and - strand by -5, according to
             # the ATACseq paper
@@ -444,14 +438,6 @@ class Pipeline(BasePipeline):
                 minus_strand_shift=MINUS_STRAND_SHIFT,
                 plus_strand_shift=PLUS_STRAND_SHIFT
             )
-
-            # bedtools_shift.run(
-            #     Parameter('-i', unshifted_bed),
-            #     Parameter('-g', pipeline_config['bedtools']['genome-sizes']),
-            #     Parameter('-m', str(MINUS_STRAND_SHIFT)),
-            #     Parameter('-p', str(PLUS_STRAND_SHIFT)),
-            #     Redirect(stream=Redirect.STDOUT, dest=processed_bed)
-            # )
 
         if step <= 6:
             processed_bed = os.path.join(output_dir, '{}.processed.bed'.format(lib_prefix))
@@ -510,11 +496,6 @@ class Pipeline(BasePipeline):
         with open(os.path.join(logs_dir, 'qc_metrics.txt'), 'w') as qc_data_file:
             qc_data_file.write(str(qc_data) + '\n')
 
-            # Get number of called peaks
-            # meta_data['num_peaks'] = subprocess.check_output(['wc', '-l',
-            #                                                   '{}.peaks.bed'.format(lib_prefix)])
-
         # Delete temporary files
         for delete_file in staging_delete:
             subprocess.call(['rm', '-rf', delete_file])
-            # Commit
