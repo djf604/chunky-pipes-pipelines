@@ -306,6 +306,7 @@ class Pipeline(BasePipeline):
             )
 
             # This creates a dependency on PySam
+            # Removes reads with template length < 38 due to steric hindrence
             samtools_index.run(Parameter(sortmerged_bam))
             sortmerged_bam_alignmentfile = pysam.AlignmentFile(sortmerged_bam, 'rb')
             steric_filter_bam_alignmentfile = pysam.AlignmentFile(steric_filter_bam, 'wb',
