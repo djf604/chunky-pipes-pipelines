@@ -129,18 +129,9 @@ class Pipeline(BasePipeline):
             'total_trimmed_reads': [],
             'percent_num_reads_mapped_genome': [],
             'percent_num_reads_mapped_transcriptome': [],
-            #'percent_num_reads_uniquely_mapped': [],
             'percent_duplicate_reads': '0',
             'num_reads_multimapped': [],
             'percent_num_reads_rrna': '',
-            #'performance_strand_specificity': [],
-            #'intragenic_rate': [],
-            #'exonic_rate': [],
-            #'coding_rate': [],
-            #'intergenic_rate': [],
-            #'mean_coverate_reads_per_base': [],
-            #'5prime_3prime_transcript_end_coverage': [],
-            #'quantification_3prime_end_bias': [],
             'viral_rna': []
 
         }
