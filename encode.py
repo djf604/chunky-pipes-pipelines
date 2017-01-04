@@ -20,7 +20,7 @@ class Pipeline(BasePipeline):
         Requirements:\nSTAR 2.4.2a\nRSEM 1.2.15"""
 
     def add_pipeline_args(self, parser):
-        parser.add_argument('--reads', required=True, action='append',
+        parser.add_argument('--reads', required=True, nargs='*',
                             help=('Reads to process with this pipeline. Denote paired-end reads with ' +
                                   'a colon (Ex. read1.fastq:read2.fastq). Specify multiple times to ' +
                                   'align multiple libraries (or pairs).'))
@@ -479,3 +479,7 @@ class Pipeline(BasePipeline):
         # Delete temporary files
         for delete_file in staging_delete:
             subprocess.call(['rm', '-rf', delete_file])
+
+        print 'Complete'
+        print 'Elapsed time: {}'.format(str(elapsed_time))
+        print 'Elapsed time seconds: {}'.format(str(elapsed_time.seconds))
