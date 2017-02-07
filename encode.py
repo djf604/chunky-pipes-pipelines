@@ -108,7 +108,7 @@ class Pipeline(BasePipeline):
         cat = Software('cat', '/bin/cat')
         cutadapt = Software('cutadapt', pipeline_config['cutadapt']['path'])
         star = Software('STAR', pipeline_config['STAR']['path'])
-        rsem_calculat_expression = Software('RSEM', pipeline_config['RSEM']['path-calculate-expression'])
+        rsem_calculate_expression = Software('RSEM', pipeline_config['RSEM']['path-calculate-expression'])
         rsem_plot_model = Software('RSEM', pipeline_config['RSEM']['path-plot-model'])
         bedGraph_to_bw = Software('bedGraphToBigWig', pipeline_config['bedgraph_to_bw']['path'])
         bed_sort = Software('bedSort', pipeline_config['bedSort']['path'])
@@ -455,7 +455,7 @@ class Pipeline(BasePipeline):
                 rsem_type.append(Parameter('--forward-prob', '0'))
 
             # Run RSEM quantification step
-            rsem_calculat_expression.run(*(rsem_common + rsem_run + rsem_type + [
+            rsem_calculate_expression.run(*(rsem_common + rsem_run + rsem_type + [
                 Parameter(transcriptome_bam),
                 Parameter(pipeline_config['RSEM']['reference-dir']),
                 Parameter(os.path.join(output_dir, 'RSEM_Quant')),
