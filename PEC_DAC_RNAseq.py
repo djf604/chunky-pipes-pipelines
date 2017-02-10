@@ -16,25 +16,24 @@ class Pipeline(BasePipeline):
         return num_lines.strip()
 
     def description(self):
-        return """This is an exact replication of the ENCODE long-rna pipeline.\n\n
-        Requirements:\nSTAR 2.4.2a\nRSEM 1.2.15"""
+        return """This is an exact replication of the ENCODE long-rna pipeline."""
 
     def add_pipeline_args(self, parser):
         parser.add_argument('--reads', required=True, nargs='*',
-                            help=('Reads to process with this pipeline. Denote paired-end reads with ' +
-                                  'a colon (Ex. read1.fastq:read2.fastq). Specify multiple times to ' +
+                            help=('Reads to process with this pipeline. Denote paired-end reads with '
+                                  'a colon (Ex. read1.fq:read2.fq). Specify multiple times to '
                                   'align multiple libraries (or pairs).'))
         parser.add_argument('--output', required=True,
                             help='Full path to output directory.')
         parser.add_argument('--lib', default=datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
-                            help=('Name of the library, prepended to output file names. Defaults to ' +
+                            help=('Name of the library, prepended to output file names. Defaults to '
                                   'a date string (YYYY-MM-DD-hh-mm-ss).'))
         parser.add_argument('--step', default=0,
                             help='Pipeline step to start at.')
         parser.add_argument('--forward-adapter', default='ZZZ',
                             help='Adapter sequence for the forward strand.')
         parser.add_argument('--reverse-adapter', default='ZZZ',
-                            help='Adapter sequnce for the reverse strand.')
+                            help='Adapter sequence for the reverse strand.')
         parser.add_argument('--is-stranded', action='store_true',
                             help='Provide this argument if library is stranded.')
         return parser
@@ -274,7 +273,6 @@ class Pipeline(BasePipeline):
                 star_strand.append(Parameter('--outSAMstrandField', 'intronMotif'))
                 star_wig.append(Parameter('--outWigStrand', 'Unstranded'))
 
-            # TODO Encode has SAM Header metadata here, but I'm going to skip it for now
             star_meta = []
 
             # Run STAR alignment step
