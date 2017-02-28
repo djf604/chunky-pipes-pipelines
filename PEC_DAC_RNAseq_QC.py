@@ -37,8 +37,8 @@ class Pipeline(BasePipeline):
                 'CollectAlignmentSummaryMetrics': {
                     'path': 'Full path to Picard CollectAlignmentSummaryMetrics'
                 },
-                'CollectGCBiasMetrics': {
-                    'path': 'Full path to Picard CollectGCBiasMetrics'
+                'CollectGcBiasMetrics': {
+                    'path': 'Full path to Picard CollectGcBiasMetrics'
                 },
                 'EstimateLibraryComplexity': {
                     'path': 'Full path to Picard EstimateLibraryComplexity'
@@ -92,7 +92,7 @@ class Pipeline(BasePipeline):
             TODO get RefFlat file, ribosomal intervals
             - CollectInsertSizeMetrics
             - CollectAlignmentSummaryMetrics
-            - CollectGCBiasMetrics
+            - CollectGcBiasMetrics
             - EstimateLibraryComplexity
         Expects the following keyword arguments:
             - picard::dict<Software> a dictionary where each key is the name of the subprogram
@@ -138,7 +138,7 @@ class Pipeline(BasePipeline):
             Parameter('OUTPUT={}'.format(os.path.join(picard_output_dir, 'alignment_summary.metrics')))
         )
 
-        picard['CollectGCBiasMetrics'].run(
+        picard['CollectGcBiasMetrics'].run(
             Parameter('INPUT={}'.format(sorted_bam)),
             Parameter('OUTPUT={}'.format(os.path.join(picard_output_dir, 'gcbias.metrics'))),
             Parameter('CHART_OUTPUT=/dev/null'),
@@ -279,8 +279,8 @@ class Pipeline(BasePipeline):
             subprogram_name: Software('picard {}'.format(subprogram_name),
                                       pipeline_config['picard']['path'] + ' {}'.format(subprogram_name))
             for subprogram_name
-            in {'CollectSequenceDictionary', 'MarkDuplicates', 'CollectRnaSeqMetrics',
-                'CollectInsertSizeMetrics', 'CollectAlignmentSummaryMetrics', 'CollectGCBiasMetrics',
+            in {'CreateSequenceDictionary', 'MarkDuplicates', 'CollectRnaSeqMetrics',
+                'CollectInsertSizeMetrics', 'CollectAlignmentSummaryMetrics', 'CollectGcBiasMetrics',
                 'EstimateLibraryComplexity'}
         }
 
@@ -314,7 +314,7 @@ class Pipeline(BasePipeline):
         # Run RNA-SeQC
         self.run_rnaseqc(
             rnaseqc=rnaseqc,
-            picard_csd=picard['CollectSequenceDictionary'],
+            picard_csd=picard['CreateSequenceDictionary'],
             samtools_faidx=samtools_faidx,
             pipeline_config=pipeline_config,
             pipeline_args=pipeline_args,
