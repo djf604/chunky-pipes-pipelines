@@ -1,5 +1,6 @@
 import os
 import pysam
+import subprocess
 from chunkypipes.components import Software, Parameter, BasePipeline
 
 
@@ -18,40 +19,22 @@ class Pipeline(BasePipeline):
 
     def configure(self):
         return {
-            'fastq': {
+            'fastqc': {
                 'path': 'Full path to FastQC'
             },
             'picard': {
                 'path': 'Full path to Picard',
-                'MarkDuplicates': {
-                    'path': 'Full path to Picard MarkDuplicates'
-                },
                 'CollectRnaSeqMetrics': {
-                    'path': 'Full path to Picard CollectRnaSeqMetrics',
                     'ref-flat': 'Full path to refFlat file',
                     'ribosomal-intervals': 'Full path to ribosomal intervals file'
                 },
-                'CollectInsertSizeMetrics': {
-                    'path': 'Full path to Picard CollectInsertSizeMetrics'
-                },
-                'CollectAlignmentSummaryMetrics': {
-                    'path': 'Full path to Picard CollectAlignmentSummaryMetrics'
-                },
-                'CollectGcBiasMetrics': {
-                    'path': 'Full path to Picard CollectGcBiasMetrics'
-                },
-                'EstimateLibraryComplexity': {
-                    'path': 'Full path to Picard EstimateLibraryComplexity'
-                }
             },
             'preseq': {
                 'path': 'Full path to preseq',
                 'bam2mr': 'Full path to bam2mr'
             },
             'RNA-SeQC': {
-                'path': 'Full path to Broad RNA-SeQC',
-                'reference': 'Full path to reference genome in fasta format',
-                'transcripts': 'Full path to GTF file defining transcripts'
+                'path': 'Full path to Broad RNA-SeQC'
             },
             'featureCounts': {
                 'path': 'Full path to featureCounts'
@@ -77,9 +60,12 @@ class Pipeline(BasePipeline):
         fastqc = kwargs['fastqc']
         pipeline_args = kwargs['pipeline_args']
 
+        fastqc_output_dir = os.path.join(pipeline_args['output_dir'], 'fastqc')
+        subprocess.call('mkdir -p {}'.format(fastqc_output_dir), shell=True)
         for fastq in pipeline_args['fastqs']:
             fastqc.run(
-                Parameter('--outdir={}'.format(os.path.join(pipeline_args['output_dir'], 'fastqc'))),
+                Parameter('--outdir={}'.format(fastqc_output_dir)),
+                Parameter('--threads', '8'),
                 Parameter(fastq)
             )
 
@@ -107,6 +93,17 @@ class Pipeline(BasePipeline):
         pipeline_args = kwargs['pipeline_args']
 
         picard_output_dir = os.path.join(pipeline_args['output_dir'], 'picard')
+        subprocess.call('mkdir -p {}'.format(picard_output_dir), shell=True)
+
+        # Create interval list
+        tmp_interval_list = os.path.join(pipeline_config['picard']['CollectRnaSeqMetrics']['ribosomal-intervals'] +
+                                         '.tmp.intervals')
+        subprocess.call('samtools view -H {} > header.tmp.txt'.format(sorted_bam), shell=True)
+        subprocess.call('cat header.tmp.txt {} > {}'.format(
+            pipeline_config['picard']['CollectRnaSeqMetrics']['ribosomal-intervals'],
+            tmp_interval_list
+        ), shell=True)
+        os.remove('header.tmp.txt')
 
         picard['MarkDuplicates'].run(
             Parameter('INPUT={}'.format(sorted_bam)),
@@ -116,9 +113,7 @@ class Pipeline(BasePipeline):
 
         picard['CollectRnaSeqMetrics'].run(
             Parameter('REF_FLAT={}'.format(pipeline_config['picard']['CollectRnaSeqMetrics']['ref-flat'])),
-            Parameter('RIBOSOMAL_INTERVALS={}'.format(
-                pipeline_config['picard']['CollectRnaSeqMetrics']['ribosomal-intervals']
-            )),
+            Parameter('RIBOSOMAL_INTERVALS={}'.format(tmp_interval_list)),
             Parameter('STRAND_SPECIFICITY={}'.format(
                 'SECOND_READ_TRANSCRIPTION_STRAND' if pipeline_args['is_stranded'] else 'NONE'
             )),
@@ -142,7 +137,8 @@ class Pipeline(BasePipeline):
             Parameter('INPUT={}'.format(sorted_bam)),
             Parameter('OUTPUT={}'.format(os.path.join(picard_output_dir, 'gcbias.metrics'))),
             Parameter('CHART_OUTPUT=/dev/null'),
-            Parameter('SUMMARY_OUTPUT={}'.format(os.path.join(picard_output_dir, 'gcbias.summary')))
+            Parameter('SUMMARY_OUTPUT={}'.format(os.path.join(picard_output_dir, 'gcbias.summary'))),
+            Parameter('REFERENCE_SEQUENCE={}'.format(pipeline_config['reference-genome']))
         )
 
         picard['EstimateLibraryComplexity'].run(
@@ -150,6 +146,7 @@ class Pipeline(BasePipeline):
             Parameter('OUTPUT={}'.format(os.path.join(picard_output_dir, 'library_complexity.metrics')))
         )
 
+        os.remove(tmp_interval_list)
 
     @staticmethod
     def run_rnaseqc(**kwargs):
@@ -167,35 +164,51 @@ class Pipeline(BasePipeline):
             - sorted_bam::str
         """
         rnaseqc = kwargs['rnaseqc']
-        picard_csd = kwargs['picard_csd']
+        picard = kwargs['picard']
         samtools_faidx = kwargs['samtools_faidx']
         pipeline_config = kwargs['pipeline_config']
         pipeline_args = kwargs['pipeline_args']
         sorted_bam = kwargs['sorted_bam']
 
         # If reference hasn't been indexed, run samtools faidx to index
-        if not os.path.isfile(pipeline_config['RNA-SeQC']['reference'] + '.fai'):
-            samtools_faidx.run(Parameter(pipeline_config['RNA-SeQC']['reference']))
+        if not os.path.isfile(pipeline_config['reference-genome'] + '.fai'):
+            samtools_faidx.run(Parameter(pipeline_config['reference-genome']))
 
         # If reference doesn't have a dictionary files, run Picard CreateSequenceDictionary
-        if not os.path.isfile(pipeline_config['RNA-SeQC']['reference'] + '.dict'):
-            picard_csd.run(
-                Parameter('REFERENCE={}'.format(pipeline_config['RNA-SeQC']['reference'])),
-                Parameter('OUTPUT={}'.format(pipeline_config['RNA-SeQC']['reference'] + '.dict')),
-                Parameter('NUM_SEQUENCES=null')
+        if not os.path.isfile(pipeline_config['reference-genome'] + '.dict'):
+            picard['CreateSequenceDictionary'].run(
+                Parameter('REFERENCE={}'.format(pipeline_config['reference-genome'])),
+                Parameter('OUTPUT={}'.format(pipeline_config['reference-genome'] + '.dict'))
             )
 
+        # Add read groups to BAM
+        tmp_readgroups_bam = sorted_bam + '.tmp.readgroups.bam'
+        picard['AddOrReplaceReadGroups'].run(
+            Parameter('INPUT={}'.format(sorted_bam)),
+            Parameter('OUTPUT={}'.format(tmp_readgroups_bam)),
+            Parameter('RGLB={}'.format(pipeline_args['lib'])),
+            Parameter('RGPL=illumina'),
+            Parameter('RGPU=flowcellid'),
+            Parameter('RGSM={}'.format(pipeline_args['lib']))
+        )
+        subprocess.call('samtools index {}'.format(tmp_readgroups_bam), shell=True)
+
         # Run RNA-SeQC
+        rnaseqc_output_dir = os.path.join(pipeline_args['output_dir'], 'RNA-SeQC')
+        subprocess.call('mkdir -p {}'.format(rnaseqc_output_dir), shell=True)
         rnaseqc.run(
-            Parameter('-o', os.path.join(pipeline_args['output_dir'], 'RNA-SeQC')),
+            Parameter('-o', rnaseqc_output_dir),
             Parameter('-r', pipeline_config['reference-genome']),
             Parameter('-s', '"{sample_id}|{bam_path}|None"'.format(
                 sample_id=pipeline_args['lib'],
-                bam_path=sorted_bam
+                bam_path=tmp_readgroups_bam
             )),
             Parameter('-t', pipeline_config['transcriptome-gtf']),
             Parameter('-singleEnd') if not pipeline_args['is_paired_end'] else Parameter()
         )
+
+        os.remove(tmp_readgroups_bam)
+        os.remove(tmp_readgroups_bam + '.bai')
 
     @staticmethod
     def run_preseq(**kwargs):
@@ -214,7 +227,9 @@ class Pipeline(BasePipeline):
         pipeline_args = kwargs['pipeline_args']
 
         preseq_output_dir = os.path.join(pipeline_args['output_dir'], 'preseq')
-        preseq['c_count'].run(
+        subprocess.call('mkdir -p {}'.format(preseq_output_dir), shell=True)
+
+        preseq['c_curve'].run(
             Parameter('-output', os.path.join(preseq_output_dir, 'c_count.txt')),
             Parameter('-bam'),
             Parameter('-pe') if pipeline_args['is_paired_end'] else Parameter(),
@@ -253,10 +268,12 @@ class Pipeline(BasePipeline):
         pipeline_args = kwargs['pipeline_args']
         pipeline_config = kwargs['pipeline_config']
 
+        featurecounts_output_dir = os.path.join(pipeline_args['output_dir'], 'featurecounts.txt')
+        subprocess.call('mkdir -p {}'.format(featurecounts_output_dir), shell=True)
         featurecounts.run(
             Parameter('-a', pipeline_config['transcriptome-gtf']),  # Annotation file
-            Parameter('-o', os.path.join(pipeline_args['output_dir'], 'featurecounts.txt')),  # Output file
-            Parameter('-s 2') if pipeline_args['is_stranded'] else Parameter(),
+            Parameter('-o', featurecounts_output_dir),  # Output file
+            Parameter('-s', '2') if pipeline_args['is_stranded'] else Parameter(),
             Parameter('-p') if pipeline_args['is_paired_end'] else Parameter(),
             Parameter(sorted_bam)
         )
@@ -281,7 +298,7 @@ class Pipeline(BasePipeline):
             for subprogram_name
             in {'CreateSequenceDictionary', 'MarkDuplicates', 'CollectRnaSeqMetrics',
                 'CollectInsertSizeMetrics', 'CollectAlignmentSummaryMetrics', 'CollectGcBiasMetrics',
-                'EstimateLibraryComplexity'}
+                'EstimateLibraryComplexity', 'AddOrReplaceReadGroups'}
         }
 
         preseq = {
@@ -296,6 +313,9 @@ class Pipeline(BasePipeline):
 
         samtools_faidx = Software('samtools faidx', pipeline_config['samtools']['path'] + ' faidx')
         novosort = Software('novosort', pipeline_config['novosort']['path'])
+
+        # Create output directory
+        subprocess.call('mkdir -p {}'.format(pipeline_args['output_dir']), shell=True)
 
         # Sort bam file
         sorted_bam = os.path.join(pipeline_args['output_dir'], 'sorted.tmp.bam')
@@ -314,7 +334,7 @@ class Pipeline(BasePipeline):
         # Run RNA-SeQC
         self.run_rnaseqc(
             rnaseqc=rnaseqc,
-            picard_csd=picard['CreateSequenceDictionary'],
+            picard=picard,
             samtools_faidx=samtools_faidx,
             pipeline_config=pipeline_config,
             pipeline_args=pipeline_args,
@@ -329,12 +349,12 @@ class Pipeline(BasePipeline):
             pipeline_args=pipeline_args
         )
 
-        self.run_preseq(
-            preseq=preseq,
-            bam2mr=bam2mr,
-            sorted_bam=sorted_bam,
-            pipeline_args=pipeline_args
-        )
+        # self.run_preseq(
+        #     preseq=preseq,
+        #     bam2mr=bam2mr,
+        #     sorted_bam=sorted_bam,
+        #     pipeline_args=pipeline_args
+        # )
 
         self.run_featurecounts(
             featurecounts=featurecounts,
