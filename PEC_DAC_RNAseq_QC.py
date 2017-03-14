@@ -108,7 +108,8 @@ class Pipeline(BasePipeline):
         picard['MarkDuplicates'].run(
             Parameter('INPUT={}'.format(sorted_bam)),
             Parameter('OUTPUT=/dev/null'),
-            Parameter('METRICS_FILE={}'.format(os.path.join(picard_output_dir, 'markduplicates.metrics')))
+            Parameter('METRICS_FILE={}'.format(os.path.join(picard_output_dir, 'markduplicates.metrics'))),
+            Parameter('TMP_DIR=/mnt/analysis/tmp')
         )
 
         picard['CollectRnaSeqMetrics'].run(
@@ -118,19 +119,22 @@ class Pipeline(BasePipeline):
                 'SECOND_READ_TRANSCRIPTION_STRAND' if pipeline_args['is_stranded'] else 'NONE'
             )),
             Parameter('INPUT={}'.format(sorted_bam)),
-            Parameter('OUTPUT={}'.format(os.path.join(picard_output_dir, 'rnaseq.metrics')))
+            Parameter('OUTPUT={}'.format(os.path.join(picard_output_dir, 'rnaseq.metrics'))),
+            Parameter('TMP_DIR=/mnt/analysis/tmp')
         )
 
         picard['CollectInsertSizeMetrics'].run(
             Parameter('INPUT={}'.format(sorted_bam)),
             Parameter('OUTPUT={}'.format(os.path.join(picard_output_dir, 'insert_size.metrics'))),
             Parameter('HISTOGRAM_FILE=/dev/null'),
+            Parameter('TMP_DIR=/mnt/analysis/tmp')
         )
 
         picard['CollectAlignmentSummaryMetrics'].run(
             Parameter('REFERENCE_SEQUENCE={}'.format(pipeline_config['reference-genome'])),
             Parameter('INPUT={}'.format(sorted_bam)),
-            Parameter('OUTPUT={}'.format(os.path.join(picard_output_dir, 'alignment_summary.metrics')))
+            Parameter('OUTPUT={}'.format(os.path.join(picard_output_dir, 'alignment_summary.metrics'))),
+            Parameter('TMP_DIR=/mnt/analysis/tmp')
         )
 
         picard['CollectGcBiasMetrics'].run(
@@ -138,12 +142,14 @@ class Pipeline(BasePipeline):
             Parameter('OUTPUT={}'.format(os.path.join(picard_output_dir, 'gcbias.metrics'))),
             Parameter('CHART_OUTPUT=/dev/null'),
             Parameter('SUMMARY_OUTPUT={}'.format(os.path.join(picard_output_dir, 'gcbias.summary'))),
-            Parameter('REFERENCE_SEQUENCE={}'.format(pipeline_config['reference-genome']))
+            Parameter('REFERENCE_SEQUENCE={}'.format(pipeline_config['reference-genome'])),
+            Parameter('TMP_DIR=/mnt/analysis/tmp')
         )
 
         picard['EstimateLibraryComplexity'].run(
             Parameter('INPUT={}'.format(sorted_bam)),
-            Parameter('OUTPUT={}'.format(os.path.join(picard_output_dir, 'library_complexity.metrics')))
+            Parameter('OUTPUT={}'.format(os.path.join(picard_output_dir, 'library_complexity.metrics'))),
+            Parameter('TMP_DIR=/mnt/analysis/tmp')
         )
 
         os.remove(tmp_interval_list)
@@ -189,6 +195,7 @@ class Pipeline(BasePipeline):
             Parameter('RGLB={}'.format(pipeline_args['lib'])),
             Parameter('RGPL=illumina'),
             Parameter('RGPU=flowcellid'),
+            Parameter('TMP_DIR=/mnt/analysis/tmp'),
             Parameter('RGSM={}'.format(pipeline_args['lib']))
         )
         subprocess.call('samtools index {}'.format(tmp_readgroups_bam), shell=True)
@@ -316,6 +323,7 @@ class Pipeline(BasePipeline):
 
         # Create output directory
         subprocess.call('mkdir -p {}'.format(pipeline_args['output_dir']), shell=True)
+        subprocess.call('mkdir -p /mnt/analysis/tmp', shell=True)
 
         # Sort bam file
         sorted_bam = os.path.join(pipeline_args['output_dir'], 'sorted.tmp.bam')
@@ -371,3 +379,4 @@ class Pipeline(BasePipeline):
         # Remove temporary sorted bam
         os.remove(sorted_bam)
         os.remove(sorted_bam + '.bai')
+        subprocess.call('rm -rf /mnt/analysis/tmp', shell=True)
