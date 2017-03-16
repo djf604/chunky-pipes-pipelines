@@ -65,7 +65,7 @@ class Pipeline(BasePipeline):
         }
 
     def add_pipeline_args(self, parser):
-        parser.add_argument('--reads', required=True, action='append',
+        parser.add_argument('--reads', required=True, nargs='*',
                             help=('Reads to process with this pipeline. Denote paired-end reads with ' +
                                   'a colon (Ex. read1.fastq:read2.fastq). Specify multiple times to ' +
                                   'align multiple libraries (or pairs).'))
