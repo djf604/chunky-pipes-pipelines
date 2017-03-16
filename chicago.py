@@ -172,24 +172,24 @@ class Pipeline(BasePipeline):
         samtools_index = Software('Samtools Index', pipeline_config['samtools']['path'] + ' index')
         samtools_faidx = Software('Samtools Faidx', pipeline_config['samtools']['path'] + ' faidx')
         picard_markduplicates = Software('Picard MarkDuplicates',
-                                         'java -Xmx{heap_size}g -jar {path} MarkDuplicates'.format(
+                                         'java -Xmx{heap_size}g -XX:+UseConcMarkSweepGC -XX:ParallelGCThreads=8 -XX:MaxGCPauseMillis=10000 -jar {path} MarkDuplicates'.format(
                                              heap_size=pipeline_config['picard'].get('heap_size',
                                                                                      JAVA_DEFAULT_HEAP_SIZE),
                                              path=pipeline_config['picard']['path']
                                          ))
         picard_create_seq_dict = Software('Picard CreateSequenceDictionary',
-                                          'java -Xmx{heap_size}g -jar {path} CreateSequenceDictionary'.format(
+                                          'java -Xmx{heap_size}g -XX:+UseConcMarkSweepGC -XX:ParallelGCThreads=8 -XX:MaxGCPauseMillis=10000 -jar {path} CreateSequenceDictionary'.format(
                                              heap_size=pipeline_config['picard'].get('heap_size',
                                                                                      JAVA_DEFAULT_HEAP_SIZE),
                                              path=pipeline_config['picard']['path']
                                           ))
-        rnaseqc = Software('RNAseQC', 'java -Xmx{heap_size}g -jar {path}'.format(
+        rnaseqc = Software('RNAseQC', 'java -Xmx{heap_size}g -XX:+UseConcMarkSweepGC -XX:ParallelGCThreads=8 -XX:MaxGCPauseMillis=10000 -jar {path}'.format(
                                              heap_size=pipeline_config['picard'].get('heap_size',
                                                                                      JAVA_DEFAULT_HEAP_SIZE),
                                              path=pipeline_config['RNAseQC']['path']
                                       ))
         picard_add_read_groups = Software('Picard AddOrReplaceReadGroups',
-                                          'java -Xmx{heap_size}g -jar {path} AddOrReplaceReadGroups'.format(
+                                          'java -Xmx{heap_size}g -XX:+UseConcMarkSweepGC -XX:ParallelGCThreads=8 -XX:MaxGCPauseMillis=10000 -jar {path} AddOrReplaceReadGroups'.format(
                                              heap_size=pipeline_config['picard'].get('heap_size',
                                                                                      JAVA_DEFAULT_HEAP_SIZE),
                                              path=pipeline_config['picard']['path']
