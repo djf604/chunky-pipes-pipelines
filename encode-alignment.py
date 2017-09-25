@@ -276,7 +276,7 @@ class Pipeline(BasePipeline):
             star_meta = []
 
             # Run STAR alignment step
-            star.run(*(star_common + star_run + star_bam + star_strand + star_meta))
+            star.run(*(star_common + star_run + star_bam + star_strand + star_meta), shell=True)
 
             # Store STAR output files
             star_output_bam = star_outfile_prefix + 'Aligned.sortedByCoord.out.bam'

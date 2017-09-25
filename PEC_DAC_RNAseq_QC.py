@@ -16,6 +16,9 @@ class Pipeline(BasePipeline):
         parser.add_argument('--is-paired-end', action='store_true', help='Whether sample was sequenced as paired-end')
         parser.add_argument('--is-stranded', action='store_true', help=('Whether library was created with a stranded '
                                                                         'protocol'))
+        parser.add_argument('--strand-direction', default='SECOND_READ_TRANSCRIPTION_STRAND',
+                            choices=('FIRST_READ_TRANSCRIPTION_STRAND', 'SECOND_READ_TRANSCRIPTION_STRAND'),
+                            help='Direction of strand specificity')
 
     def configure(self):
         return {
@@ -116,7 +119,7 @@ class Pipeline(BasePipeline):
             Parameter('REF_FLAT={}'.format(pipeline_config['picard']['CollectRnaSeqMetrics']['ref-flat'])),
             Parameter('RIBOSOMAL_INTERVALS={}'.format(tmp_interval_list)),
             Parameter('STRAND_SPECIFICITY={}'.format(
-                'SECOND_READ_TRANSCRIPTION_STRAND' if pipeline_args['is_stranded'] else 'NONE'
+                pipeline_args['strand_direction'] if pipeline_args['is_stranded'] else 'NONE'
             )),
             Parameter('INPUT={}'.format(sorted_bam)),
             Parameter('OUTPUT={}'.format(os.path.join(picard_output_dir, 'rnaseq.metrics'))),
@@ -277,10 +280,11 @@ class Pipeline(BasePipeline):
 
         featurecounts_output_dir = os.path.join(pipeline_args['output_dir'], 'featurecounts.txt')
         subprocess.call('mkdir -p {}'.format(featurecounts_output_dir), shell=True)
+        strand_specificity = '2' if pipeline_args['strand_direction'] == 'SECOND_READ_TRANSCRIPTION_STRAND' else '1'
         featurecounts.run(
             Parameter('-a', pipeline_config['transcriptome-gtf']),  # Annotation file
             Parameter('-o', featurecounts_output_dir),  # Output file
-            Parameter('-s', '2') if pipeline_args['is_stranded'] else Parameter(),
+            Parameter('-s', strand_specificity) if pipeline_args['is_stranded'] else Parameter(),
             Parameter('-p') if pipeline_args['is_paired_end'] else Parameter(),
             Parameter(sorted_bam)
         )
@@ -295,6 +299,7 @@ class Pipeline(BasePipeline):
             chrm.write('{}\n'.format(sorted_pybam.count(reference='chrM')/float(sorted_pybam.mapped)))
 
     def run_pipeline(self, pipeline_args, pipeline_config):
+
         # Instantiate Software instances
         fastqc = Software('FastQC', pipeline_config['fastqc']['path'])
         rnaseqc = Software('RNA-SeQC', pipeline_config['RNA-SeQC']['path'])
