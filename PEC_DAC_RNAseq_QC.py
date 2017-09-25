@@ -5,6 +5,9 @@ from chunkypipes.components import Software, Parameter, BasePipeline, ParallelBl
 
 
 class Pipeline(BasePipeline):
+    def dependencies(self):
+        return ['pysam']
+
     def description(self):
         return 'QC pipeline for the PsychENCODE Data Analysis Core'
 
