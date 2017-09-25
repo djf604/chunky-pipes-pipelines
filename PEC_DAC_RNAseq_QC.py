@@ -1,7 +1,7 @@
 import os
 import pysam
 import subprocess
-from chunkypipes.components import Software, Parameter, BasePipeline
+from chunkypipes.components import Software, Parameter, BasePipeline, ParallelBlock
 
 
 class Pipeline(BasePipeline):
@@ -65,12 +65,16 @@ class Pipeline(BasePipeline):
 
         fastqc_output_dir = os.path.join(pipeline_args['output_dir'], 'fastqc')
         subprocess.call('mkdir -p {}'.format(fastqc_output_dir), shell=True)
+
+        # Process FastQC runs in parallel
+        pblock = ParallelBlock(cores=8)
         for fastq in pipeline_args['fastqs']:
-            fastqc.run(
+            pblock.add(fastqc.prep(
                 Parameter('--outdir={}'.format(fastqc_output_dir)),
                 Parameter('--threads', '8'),
                 Parameter(fastq)
-            )
+            ))
+        pblock.run()
 
     @staticmethod
     def run_picard_suite(**kwargs):
