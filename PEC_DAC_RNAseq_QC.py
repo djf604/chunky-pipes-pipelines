@@ -29,7 +29,7 @@ class Pipeline(BasePipeline):
                 'path': 'Full path to FastQC'
             },
             'picard': {
-                'path': 'Full path to Picard',
+                'path': 'Full path to Picard, including the call to java and any java options',
                 'CollectRnaSeqMetrics': {
                     'ref-flat': 'Full path to refFlat file',
                     'ribosomal-intervals': 'Full path to ribosomal intervals file'
@@ -40,7 +40,7 @@ class Pipeline(BasePipeline):
                 'bam2mr': 'Full path to bam2mr'
             },
             'RNA-SeQC': {
-                'path': 'Full path to Broad RNA-SeQC'
+                'path': 'Full path to Broad RNA-SeQC, including the call to java and any java options'
             },
             'featureCounts': {
                 'path': 'Full path to featureCounts'
@@ -52,7 +52,8 @@ class Pipeline(BasePipeline):
                 'path': 'Full path to novosort'
             },
             'reference-genome': 'Full path to reference genome fasta',
-            'transcriptome-gtf': 'Full path to GTF file defining transcripts'
+            'transcriptome-gtf': 'Full path to GTF file defining transcripts',
+            'tmp-dir': 'Full path to a directory for temporary files'
         }
 
     @staticmethod
@@ -68,6 +69,13 @@ class Pipeline(BasePipeline):
 
         fastqc_output_dir = os.path.join(pipeline_args['output_dir'], 'fastqc')
         subprocess.call('mkdir -p {}'.format(fastqc_output_dir), shell=True)
+
+        # for fastq in pipeline_args['fastqs']:
+        #     fastqc.prep(
+        #         Parameter('--outdir={}'.format(fastqc_output_dir)),
+        #         Parameter('--threads', '8'),
+        #         Parameter(fastq)
+        #     )
 
         # Process FastQC runs in parallel
         pblock = ParallelBlock(cores=8)
@@ -119,7 +127,7 @@ class Pipeline(BasePipeline):
             Parameter('INPUT={}'.format(sorted_bam)),
             Parameter('OUTPUT=/dev/null'),
             Parameter('METRICS_FILE={}'.format(os.path.join(picard_output_dir, 'markduplicates.metrics'))),
-            Parameter('TMP_DIR=/mnt/analysis/tmp')
+            Parameter('TMP_DIR={}'.format(pipeline_config['tmp-dir']))
         )
 
         picard['CollectRnaSeqMetrics'].run(
@@ -130,21 +138,21 @@ class Pipeline(BasePipeline):
             )),
             Parameter('INPUT={}'.format(sorted_bam)),
             Parameter('OUTPUT={}'.format(os.path.join(picard_output_dir, 'rnaseq.metrics'))),
-            Parameter('TMP_DIR=/mnt/analysis/tmp')
+            Parameter('TMP_DIR={}'.format(pipeline_config['tmp-dir']))
         )
 
         picard['CollectInsertSizeMetrics'].run(
             Parameter('INPUT={}'.format(sorted_bam)),
             Parameter('OUTPUT={}'.format(os.path.join(picard_output_dir, 'insert_size.metrics'))),
             Parameter('HISTOGRAM_FILE=/dev/null'),
-            Parameter('TMP_DIR=/mnt/analysis/tmp')
+            Parameter('TMP_DIR={}'.format(pipeline_config['tmp-dir']))
         )
 
         picard['CollectAlignmentSummaryMetrics'].run(
             Parameter('REFERENCE_SEQUENCE={}'.format(pipeline_config['reference-genome'])),
             Parameter('INPUT={}'.format(sorted_bam)),
             Parameter('OUTPUT={}'.format(os.path.join(picard_output_dir, 'alignment_summary.metrics'))),
-            Parameter('TMP_DIR=/mnt/analysis/tmp')
+            Parameter('TMP_DIR={}'.format(pipeline_config['tmp-dir']))
         )
 
         picard['CollectGcBiasMetrics'].run(
@@ -153,13 +161,13 @@ class Pipeline(BasePipeline):
             Parameter('CHART_OUTPUT=/dev/null'),
             Parameter('SUMMARY_OUTPUT={}'.format(os.path.join(picard_output_dir, 'gcbias.summary'))),
             Parameter('REFERENCE_SEQUENCE={}'.format(pipeline_config['reference-genome'])),
-            Parameter('TMP_DIR=/mnt/analysis/tmp')
+            Parameter('TMP_DIR={}'.format(pipeline_config['tmp-dir']))
         )
 
         picard['EstimateLibraryComplexity'].run(
             Parameter('INPUT={}'.format(sorted_bam)),
             Parameter('OUTPUT={}'.format(os.path.join(picard_output_dir, 'library_complexity.metrics'))),
-            Parameter('TMP_DIR=/mnt/analysis/tmp')
+            Parameter('TMP_DIR={}'.format(pipeline_config['tmp-dir']))
         )
 
         os.remove(tmp_interval_list)
@@ -205,7 +213,7 @@ class Pipeline(BasePipeline):
             Parameter('RGLB={}'.format(pipeline_args['lib'])),
             Parameter('RGPL=illumina'),
             Parameter('RGPU=flowcellid'),
-            Parameter('TMP_DIR=/mnt/analysis/tmp'),
+            Parameter('TMP_DIR={}'.format(pipeline_config['tmp-dir'])),
             Parameter('RGSM={}'.format(pipeline_args['lib']))
         )
         subprocess.call('samtools index {}'.format(tmp_readgroups_bam), shell=True)
@@ -335,7 +343,7 @@ class Pipeline(BasePipeline):
 
         # Create output directory
         subprocess.call('mkdir -p {}'.format(pipeline_args['output_dir']), shell=True)
-        subprocess.call('mkdir -p /mnt/analysis/tmp', shell=True)
+        subprocess.call('mkdir -p {}'.format(pipeline_config['tmp-dir']), shell=True)
 
         # Sort bam file
         sorted_bam = os.path.join(pipeline_args['output_dir'], 'sorted.tmp.bam')
@@ -391,4 +399,4 @@ class Pipeline(BasePipeline):
         # Remove temporary sorted bam
         os.remove(sorted_bam)
         os.remove(sorted_bam + '.bai')
-        subprocess.call('rm -rf /mnt/analysis/tmp', shell=True)
+        # subprocess.call('rm -rf /mnt/analysis/tmp', shell=True)
