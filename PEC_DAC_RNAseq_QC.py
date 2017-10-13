@@ -346,7 +346,8 @@ class Pipeline(BasePipeline):
         subprocess.call('mkdir -p {}'.format(pipeline_config['tmp-dir']), shell=True)
 
         # Sort bam file
-        sorted_bam = os.path.join(pipeline_args['output_dir'], 'sorted.tmp.bam')
+        # sorted_bam = os.path.join(pipeline_args['output_dir'], 'sorted.tmp.bam')
+        sorted_bam = os.path.join(pipeline_args['output_dir'], '{}.sorted.tmp.bam'.format(pipeline_args['lib']))
         novosort.run(
             Parameter('--index'),
             Parameter('--output', sorted_bam),
