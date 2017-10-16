@@ -114,8 +114,7 @@ class Pipeline(BasePipeline):
         subprocess.call('mkdir -p {}'.format(picard_output_dir), shell=True)
 
         # Create interval list
-        tmp_interval_list = os.path.join(pipeline_args['output_dir'], pipeline_config['picard']['CollectRnaSeqMetrics']['ribosomal-intervals'] +
-                                         '.tmp.intervals')
+        tmp_interval_list = os.path.join(pipeline_args['output_dir'], 'ribo.tmp.intervals')
         subprocess.call('samtools view -H {} > header.tmp.txt'.format(sorted_bam), shell=True)
         subprocess.call('cat header.tmp.txt {} > {}'.format(
             pipeline_config['picard']['CollectRnaSeqMetrics']['ribosomal-intervals'],
