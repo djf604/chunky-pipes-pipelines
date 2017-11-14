@@ -377,7 +377,7 @@ class Pipeline(BasePipeline):
             # Template command
             merge_cmd = 'cat <({input1}) <({input2}) | {compress} > {output}'
             input1_cmd = '{samtools} view -H {bam}'
-            compress_cmd = 'samtools view -@ {threads} -bS -'
+            compress_cmd = '{samtools} view -@ {threads} -bS -'
 
             if run_is_paired_end:
                 input2_cmd = ('{samtools} view -@ {threads} {bam} | ' +
@@ -401,6 +401,7 @@ class Pipeline(BasePipeline):
                     tmpdir=os.path.join(output_dir, 'tmp')
                 ),
                 compress=compress_cmd.format(
+                    samtools=pipeline_config['samtools']['path'],
                     threads=pipeline_config['RSEM']['threads']
                 ),
                 output=transcriptome_bam
@@ -419,6 +420,7 @@ class Pipeline(BasePipeline):
                     tmpdir=os.path.join(output_dir, 'tmp')
                 ),
                 compress=compress_cmd.format(
+                    samtools=pipeline_config['samtools']['path'],
                     threads=pipeline_config['RSEM']['threads']
                 ),
                 output=transcriptome_bam
